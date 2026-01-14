@@ -817,5 +817,6 @@ function Find-MsiFile {
 
             $ProgressCount += 1
         }
+        Write-Progress -Activity "Enumerating MSI files ($($MsiFilePaths.Count)/$($MsiFilePaths.Count))..." -Status "100% Complete:" -Completed
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-01-14
+
+### Fixed
+
+- Missing Write-Progress statements causing progress overlay to not be cleaned up after certain checks.
+
 ## 2025-12-25
 
 ### Added

@@ -1332,6 +1332,7 @@ function Invoke-MsiAutomaticRepairWhitelistCheck {
 
                 $ProgressCount += 1
             }
+            Write-Progress -Activity "Checking whitelisted MSI files ($($WhitelistedMsiFiles.Count)/$($WhitelistedMsiFiles.Count))..." -Status "100% Complete:" -Completed
         }
 
         $CheckResult = New-Object -TypeName PSObject
