@@ -126,7 +126,6 @@ jobs:
           if [[ "${event_name}" = "schedule" ]]; then
             if [[ "${DATA_UPDATED}" = "true" ]]; then
               create_release=1
-              gh release create "${RELEASE_TAG}" ./release/*.ps1
             fi
           else
             create_release=1
