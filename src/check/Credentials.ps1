@@ -781,6 +781,67 @@ function Invoke-SmaAgentConnectivityCredentialCheck {
     }
 }
 
+function Invoke-ScomRunAsAccountCredentialCheck {
+    <#
+    .SYNOPSIS
+    Check whether the event logs contain traces of SCOM Run As accounts being used locally. If so, the clear-text credentials of those accounts can be extracted from the registry with administrator privileges.
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This aims at identifying SCOM "Run As" accounts. When present those accounts are stored in the registry. However, the enumeration of the sub-key under which they can be found requires administrator privileges. As pointed out in the blog post referenced below, though, low-privilege users can check the event logs to find traces of such accounts being used locally. Events with ID 7026 (information / log on success) or 7002 (error / log on failure) can be used for that purpose most notably because a SCOM agent regularly checks whether the credentials are valid. If so, the account's name can be found in the log message.
+
+    .EXAMPLE
+    PS C:\>  Invoke-ScomRunAsAccountCredentialCheck
+    EventID       : 7026
+    TimeGenerated : 2026-01-21 - 13:31:08
+    Account       : FOUNDATION\svc_scom_runas
+    Message       : The Health Service successfully logged on the RunAs account FOUNDATION\svc_scom_runas for management group SCOM-MG
+
+    .LINK
+    https://specterops.io/blog/2025/12/10/scommand-and-conquer-attacking-system-center-operations-manager-part-1/
+    #>
+
+    [CmdletBinding()]
+    param (
+        [UInt32] $BaseSeverity
+    )
+
+    process {
+        $AllResults = @()
+
+        try {
+            $OperationsManagerEventLogs = Get-EventLog -LogName "Operations Manager"
+            $Accounts = @()
+            foreach ($OperationsManagerEventLog in $OperationsManagerEventLogs) {
+
+                if ($OperationsManagerEventLog.Message -match ".*on the RunAs account (.+) for management group") {
+
+                    $AccountName = $Matches[1]
+                    if ($Accounts -contains $AccountName) { continue }
+                    $Accounts += $AccountName
+
+                    $Result = New-Object -TypeName PSObject
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "EventID" -Value $OperationsManagerEventLog.EventID
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "TimeGenerated" -Value $(Convert-DateToString -Date $OperationsManagerEventLog.TimeGenerated -IncludeTime)
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Account" -Value $AccountName
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Message" -Value $OperationsManagerEventLog.Message
+                    $AllResults += $Result
+                }
+            }
+        }
+        catch {
+            Write-Verbose "Event log 'Operations Manager' not found."
+        }
+
+        $CheckResult = New-Object -TypeName PSObject
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($AllResults) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult
+    }
+}
+
 function Invoke-VncCredentialCheck {
     <#
     .SYNOPSIS

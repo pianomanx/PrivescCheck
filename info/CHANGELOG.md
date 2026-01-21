@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-01-21
+
+### Added
+
+- Add a check for SCOM agent "Run As" accounts (using the event logs).
+
 ## 2026-01-14
 
 ### Fixed
