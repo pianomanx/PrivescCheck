@@ -5,6 +5,7 @@
 ### Added
 
 - Check for MDE onboarding status and configuration.
+- AppLocker policy enumeration from the filesystem (rules deployed through Intune).
 
 ## 2026-01-21
 

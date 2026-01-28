@@ -615,7 +615,7 @@ function Get-FirstExistingParentFolderPath {
     try {
         $ParentPath = Split-Path $Path -Parent
         if ($ParentPath -and $(Test-Path -Path $ParentPath -ErrorAction SilentlyContinue)) {
-            Resolve-Path -Path $ParentPath | Select-Object -ExpandProperty "Path" | Convert-Path
+            Resolve-Path -Path $ParentPath -ErrorAction SilentlyContinue | Select-Object -ExpandProperty "Path" | Convert-Path
         }
         else {
             Get-FirstExistingParentFolderPath -Path $ParentPath

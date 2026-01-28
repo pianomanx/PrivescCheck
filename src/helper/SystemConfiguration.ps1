@@ -624,6 +624,47 @@ function Get-AppLockerRuleFromRegistry {
     }
 }
 
+function Get-AppLockerRuleFromFileSystem {
+    <#
+    .SYNOPSIS
+    Enumerate AppLocker policy files on the filesystem.
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This cmdlet enumerates AppLocker policy files which are cached under "C:\WINDOWS\System32\AppLocker\MDM". This seems to tbe case when the rules are deployed using Intune. In that case, though, we do not get a single policy file but rather a set of files, each one corresponding to a rule collection for a file type. So, this cmdlet aggregates all the file contents and recreates the expected "AppLockerPolicy" XML file format.
+    #>
+
+    [OutputType([String])]
+    [CmdletBinding()]
+    param ()
+
+    process {
+        $FullPolicy = "<AppLockerPolicy Version=`"1`">`n"
+
+        $MdmFolderPath = Join-Path -Path $env:SystemRoot -ChildPath "System32\AppLocker\MDM"
+        $PolicyFiles = Get-ChildItem -Path $MdmFolderPath -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "Policy" }
+        foreach ($PolicyFile in $PolicyFiles) {
+            $PolicyContent = Get-Content -Path $PolicyFile.FullName -Encoding Unicode
+            try {
+                $PolicyXml = [xml] $PolicyContent
+                $RuleCollection = $PolicyXml.GetElementsByTagName("RuleCollection")
+                if ($RuleCollection.Count -eq 1) {
+                    $FullPolicy += "$($PolicyXml.InnerXml)`n"
+                }
+            }
+            catch {
+                Write-Warning "Failed to parse file $($PolicyFile.FullName)"
+            }
+        }
+
+        $FullPolicy += "</AppLockerPolicy>`n"
+
+        return $FullPolicy
+    }
+}
+
 function Get-AppLockerRule {
     <#
     .SYNOPSIS
@@ -704,6 +745,12 @@ function Get-AppLockerRule {
         else {
             Write-Warning "Incompatible PowerShell version detected, retrieving AppLocker policy from registry instead of using 'Get-AppLockerPolicy'..."
             $AppLockerPolicyXml = [xml] (Get-AppLockerRuleFromRegistry)
+        }
+
+        # If we can't get the policy using Get-AppLockerPolicy and we can't get
+        # it from the registry either, try enumerating it from the filesystem.
+        if ($AppLockerPolicyXml.AppLockerPolicy.GetElementsByTagName("RuleCollection").Count -eq 0) {
+            $AppLockerPolicyXml = [xml] (Get-AppLockerRuleFromFileSystem)
         }
 
         foreach ($RuleCollection in $AppLockerPolicyXml.AppLockerPolicy.GetElementsByTagName("RuleCollection")) {
@@ -820,7 +867,7 @@ function Get-AppLockerRule {
                                                 $Description = "This rule allows files to be executed from a system folder, and could therefore be vulnerable."
                                             }
                                             else {
-                                                $ModifiablePaths = Get-ModifiablePath -Path $CandidatePath | Where-Object { $_ -and (-not [String]::IsNullOrEmpty($_.ModifiablePath)) }
+                                                $ModifiablePaths = Get-ModifiablePath -Path $CandidatePath.Trim("*") | Where-Object { $_ -and (-not [String]::IsNullOrEmpty($_.ModifiablePath)) }
                                                 if ($ModifiablePaths) {
                                                     $Level = 3
                                                     $Description = "This rule allows files to be executed from a location where the current user has write access."
