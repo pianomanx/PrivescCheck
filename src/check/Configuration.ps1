@@ -800,6 +800,104 @@ function Invoke-DefenderExclusionCheck {
     }
 }
 
+function Invoke-DefenderForEndpointConfigurationCheck {
+    <#
+    .SYNOPSIS
+    Get information about Microsoft Defender for Endpoint state and configuration.
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This cmdlet aims at identifying whether MDE is enabled by checking its onboarding status, and enumerating a few key pieces of information regarding its configuration.
+
+    .EXAMPLE
+    PS C:\> Invoke-DefenderForEndpointConfigurationCheck
+
+    OnboardingState                        : 0
+    OrganizationId                         :
+    MsSenseDllVersion                      : 10.8792.27763.1022
+    ConfigurationVersion                   : 0.0.0.0
+    RealtimeMonitoringEnabled              : False
+    BehaviorMonitoringEnabled              : True
+    TamperProtectionEnabled                : False
+    PUAProtectionEnabled                   : True
+    NetworkProtectionEnabled               : False
+    ArchiveScanningEnabled                 : True
+    EmailScanningEnabled                   : False
+    MappedNetworkDrivesScanningEnabled     : False
+    RemovableDrivesScanningEnabled         : False
+    DownloadsAndAttachmentsScanningEnabled : True
+    NetworkFilesScanningEnabled            : True
+    ScriptScanningEnabled                  : True
+
+    .LINK
+    https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-defender
+    #>
+
+    [CmdletBinding()]
+    param (
+        [UInt32] $BaseSeverity
+    )
+
+    begin {
+        $MdeStatusRegKey = "HKLM\SOFTWARE\Microsoft\Windows Advanced Threat Protection\Status"
+    }
+
+    process {
+        $Result = New-Object -TypeName PSObject
+
+        $OnboardingState = (Get-ItemProperty -Path "Registry::$($MdeStatusRegKey)" -Name "OnboardingState" -ErrorAction SilentlyContinue)."OnboardingState"
+        $OrgId = (Get-ItemProperty -Path "Registry::$($MdeStatusRegKey)" -Name "OrgId" -ErrorAction SilentlyContinue)."OrgId"
+        $MsSenseDllVersion = (Get-ItemProperty -Path "Registry::$($MdeStatusRegKey)" -Name "MsSenseDllVersion" -ErrorAction SilentlyContinue)."MsSenseDllVersion"
+        $ConfigurationVersion = (Get-ItemProperty -Path "Registry::$($MdeStatusRegKey)" -Name "ConfigurationVersion" -ErrorAction SilentlyContinue)."ConfigurationVersion"
+
+        $Result | Add-Member -MemberType "NoteProperty" -Name "OnboardingState" -Value $OnboardingState
+        $Result | Add-Member -MemberType "NoteProperty" -Name "OrganizationId" -Value $OrgId
+        $Result | Add-Member -MemberType "NoteProperty" -Name "MsSenseDllVersion" -Value $MsSenseDllVersion
+        $Result | Add-Member -MemberType "NoteProperty" -Name "ConfigurationVersion" -Value $ConfigurationVersion
+
+        $MpPreference = Get-MpPreference
+        if ($MpPreference) {
+            $RealtimeMonitoringEnabled = -not $MpPreference.DisableRealtimeMonitoring
+            $BehaviorMonitoringEnabled = -not $MpPreference.DisableBehaviorMonitoring
+
+            $TamperProtectionEnabled = -not $MpPreference.DisableTamperProtection
+            $PUAProtectionEnabled = $MpPreference.PUAProtection -gt 0
+            $NetworkProtectionEnabled = $MpPreference.EnableNetworkProtection -gt 0
+
+            $ArchiveScanningEnabled = -not $MpPreference.DisableArchiveScanning
+            $EmailScanningEnabled = -not $MpPreference.DisableEmailScanning
+            $MappedNetworkDrivesScanningEnabled = -not $MpPreference.DisableScanningMappedNetworkDrivesForFullScan
+            $RemovableDrivesScanningEnabled = -not $MpPreference.DisableRemovableDriveScanning
+            $DownloadsAndAttachmentsScanningEnabled = -not $MpPreference.DisableIOAVProtection
+            $NetworkFilesScanningEnabled = -not $MpPreference.DisableScanningNetworkFiles
+            $ScriptScanningEnabled = -not $MpPreference.DisableScriptScanning
+
+            $Result | Add-Member -MemberType "NoteProperty" -Name "RealtimeMonitoringEnabled" -Value $RealtimeMonitoringEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "BehaviorMonitoringEnabled" -Value $BehaviorMonitoringEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "TamperProtectionEnabled" -Value $TamperProtectionEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "PUAProtectionEnabled" -Value $PUAProtectionEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "NetworkProtectionEnabled" -Value $NetworkProtectionEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "ArchiveScanningEnabled" -Value $ArchiveScanningEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "EmailScanningEnabled" -Value $EmailScanningEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "MappedNetworkDrivesScanningEnabled" -Value $MappedNetworkDrivesScanningEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "RemovableDrivesScanningEnabled" -Value $RemovableDrivesScanningEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "DownloadsAndAttachmentsScanningEnabled" -Value $DownloadsAndAttachmentsScanningEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "NetworkFilesScanningEnabled" -Value $NetworkFilesScanningEnabled
+            $Result | Add-Member -MemberType "NoteProperty" -Name "ScriptScanningEnabled" -Value $ScriptScanningEnabled
+        }
+        else {
+            Write-Warning "Failed to get MP Preference"
+        }
+
+        $CheckResult = New-Object -TypeName PSObject
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $Result
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($Result) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult
+    }
+}
+
 function Invoke-SmbConfigurationCheck {
     <#
     .SYNOPSIS

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-01-28
+
+### Added
+
+- Check for MDE onboarding status and configuration.
+
 ## 2026-01-21
 
 ### Added
