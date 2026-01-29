@@ -7,6 +7,7 @@
     "cSpell.words": [
         "ACCOUNTDISABLE",
         "ACPI",
+        "Addin",
         "Addins",
         "ADSI",
         "Advapi",
@@ -173,6 +174,7 @@
         "obscuresec",
         "oemid",
         "oeminfo",
+        "OMEX",
         "Oper",
         "OSDRIVE",
         "ovno",
@@ -260,6 +262,7 @@
         "USERDNSDOMAIN",
         "Vaknin",
         "Vaultcli",
+        "VBOM",
         "vncserver",
         "Vollmer",
         "Vuln",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-01-29
+
+### Added
+
+- Add a helper function for enumerating Microsoft Office Trust Center security settings.
+
 ## 2026-01-28
 
 ### Added

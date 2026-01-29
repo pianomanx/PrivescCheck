@@ -1593,3 +1593,287 @@ function Get-PersonalCertificateInformation {
         }
     }
 }
+
+function Get-MicrosoftOfficeTrustCenterConfiguration {
+    <#
+    .SYNOPSIS
+    Retrieve key information about the Microsoft Office Trust Center configuration.
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This cmdlet enumerates the Microsoft Office Trust Center settings regarding macro execution, ActiveX controls, Protected View, etc.
+    #>
+
+    [OutputType([Object[]])]
+    [CmdletBinding()]
+    param ()
+
+    begin {
+        $OfficeKeyPaths = @(
+            "HKCU\Software\Microsoft\Office",
+            "HKCU\Software\Policies\Microsoft\Office"
+        )
+
+        $Applications = @("Word", "Excel", "PowerPoint", "Access")
+
+        # Word uses a different value range for macro settings than the other Office applications.
+        $VBAWarningsWordSetting = @{
+            "Applications" = @("Word")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "VBAWarnings"
+            "Descriptions" = @(
+                "Disable all macros without notification",
+                "Enable all macros",
+                "Disable all macros with notification (default)",
+                "Disable all macros except digitally signed macros"
+            )
+            "Default" = 2
+        }
+
+        $VBAWarningsSetting = @{
+            "Applications" = @("Excel", "PowerPoint", "Access")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "VBAWarnings"
+            "Descriptions" = @(
+                "Undefined",
+                "Enable all macros",
+                "Disable all macros with notification (default)",
+                "Disable all macros except digitally signed macros",
+                "Disable all macros without notification"
+            )
+            "Default" = 2
+        }
+
+        $XL4MacroWarningFollowVBASetting = @{
+            "Applications" = @("Excel")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "XL4MacroWarningFollowVBA"
+            "Descriptions" = @(
+                "Excel 4.0 macros disabled (default)",
+                "Excel 4.0 macros enabled when VBA macros are enabled"
+            )
+            "Default" = 0
+        }
+
+        $AccessVBOMSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "AccessVBOM"
+            "Descriptions" = @(
+                "Trust access to the VBA project object model disabled (default)",
+                "Trust access to the VBA project object model enabled"
+            )
+            "Default" = 0
+        }
+
+        $RequireAddinSigSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint", "Access")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "RequireAddinSig"
+            "Descriptions" = @(
+                "Do not require Application Add-ins to be signed by Trusted Publisher (default)",
+                "Require Application Add-ins to be signed by Trusted Publisher"
+            )
+            "Default" = 0
+        }
+
+        $NoTBPromptUnsignedAddinSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint", "Access")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "NoTBPromptUnsignedAddin"
+            "Descriptions" = @(
+                "Enable notification for unsigned add-ins (default)",
+                "Disable notification for unsigned add-ins (code will remain disabled)"
+            )
+            "Default" = 0
+        }
+
+        $DisableAllAddinsSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint", "Access")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "DisableAllAddins"
+            "Descriptions" = @(
+                "Enable Application Add-ins (default)",
+                "Disable all Application Add-ins"
+            )
+            "Default" = 0
+        }
+
+        $DisableInternetFilesInPVSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint")
+            "SubKey" = "{APPLICATION}\Security\ProtectedView"
+            "Value" = "DisableInternetFilesInPV"
+            "Descriptions" = @(
+                "Protected View for files originating from the Internet is enabled (default)",
+                "Protected View for files originating from the Internet is disabled"
+            )
+            "Default" = 0
+        }
+
+        $DisableUnsafeLocationsInPVSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint")
+            "SubKey" = "{APPLICATION}\Security\ProtectedView"
+            "Value" = "DisableUnsafeLocationsInPV"
+            "Descriptions" = @(
+                "Protected View for files located in potentially unsafe locations is enabled (default)",
+                "Protected View for files located in potentially unsafe locations is disabled"
+            )
+            "Default" = 0
+        }
+
+        $DisableAttachmentsInPV = @{
+            "Applications" = @("Word", "Excel", "PowerPoint")
+            "SubKey" = "{APPLICATION}\Security\ProtectedView"
+            "Value" = "DisableAttachmentsInPV"
+            "Descriptions" = @(
+                "Protected View for Outlook attachments is enabled (default)",
+                "Protected View for Outlook attachments is disabled"
+            )
+            "Default" = 0
+        }
+
+        $AllLocationsDisabledSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint", "Access")
+            "SubKey" = "{APPLICATION}\Security\Trusted Locations"
+            "Value" = "AllLocationsDisabled"
+            "Descriptions" = @(
+                "Enable Trusted Locations (default)",
+                "Disable all Trusted Locations"
+            )
+            "Default" = 0
+        }
+
+        $AllowNetworkLocationsSetting = @{
+            "Applications" = @("Word", "Excel", "PowerPoint", "Access")
+            "SubKey" = "{APPLICATION}\Security\Trusted Locations"
+            "Value" = "AllowNetworkLocations"
+            "Descriptions" = @(
+                "Do not allow Trusted Locations on my network (default)",
+                "Allow Trusted Locations on my network"
+            )
+            "Default" = 0
+        }
+
+        $DisableAllActiveXSetting = @{
+            "Applications" = @("Common")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "DisableAllActiveX"
+            "Descriptions" = @(
+                "Enable ActiveX controls (default)",
+                "Disable all ActiveX controls without notification"
+            )
+            "Default" = 0
+        }
+
+        $UFIControlsSetting = @{
+            "Applications" = @("Common")
+            "SubKey" = "{APPLICATION}\Security"
+            "Value" = "UFIControls"
+            "Descriptions" = @(
+                "Undefined",
+                "Enable all ActiveX controls with restrictions and without prompting",
+                "Enable all ActiveX controls with restrictions and without prompting, Safe mode enabled",
+                "Prompt me before enabling UFI ActiveX controls with additional restrictions and SFI controls with minimal restrictions",
+                "Prompt me before enabling Unsafe for Initialization (UFI) ActiveX controls with additional restrictions and Safe for Initialization (SFI) controls with minimal restrictions, Safe mode enabled",
+                "Prompt me before enabling all ActiveX controls with minimal restrictions",
+                "Prompt me before enabling all ActiveX controls with minimal restrictions, Safe mode enabled (default)"
+            )
+            "Default" = 6
+        }
+
+        $DisableAllCatalogsSetting = @{
+            "Applications" = @("WEF")
+            "SubKey" = "{APPLICATION}\TrustedCatalogs"
+            "Value" = "DisableAllCatalogs"
+            "Descriptions" = @(
+                "Allow web add-ins to start (default)",
+                "Don't allow web add-ins to start"
+            )
+            "Default" = 0
+        }
+
+        $DisableOMEXCatalogsSetting = @{
+            "Applications" = @("WEF")
+            "SubKey" = "{APPLICATION}\TrustedCatalogs"
+            "Value" = "DisableOMEXCatalogs"
+            "Descriptions" = @(
+                "Allow web add-ins from the Office Store to start (default)",
+                "Don't allow web add-ins from the Office Store to start"
+            )
+            "Default" = 0
+        }
+
+        $Settings = @($VBAWarningsWordSetting, $VBAWarningsSetting, $XL4MacroWarningFollowVBASetting, $AccessVBOMSetting, $RequireAddinSigSetting, $NoTBPromptUnsignedAddinSetting, $DisableAllAddinsSetting, $DisableInternetFilesInPVSetting, $DisableUnsafeLocationsInPVSetting, $DisableAttachmentsInPV, $AllLocationsDisabledSetting, $AllowNetworkLocationsSetting, $DisableAllActiveXSetting, $UFIControlsSetting, $DisableAllCatalogsSetting, $DisableOMEXCatalogsSetting)
+    }
+
+    process {
+        $AllResults = @()
+
+        foreach ($OfficeKeyPath in $OfficeKeyPaths) {
+
+            Get-ChildItem -Path "registry::$($OfficeKeyPath)" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*.*" } | ForEach-Object {
+
+                $RootKey = $_.Name
+                $Version = $_.PSChildName
+
+                foreach ($Setting in $Settings) {
+
+                    foreach ($Application in $Setting["Applications"]) {
+
+                        $RegKeyPath = Join-Path -Path $RootKey -ChildPath $Application
+                        $RegKey = Get-Item -Path "registry::$($RegKeyPath)" -ErrorAction SilentlyContinue
+                        if ($null -eq $RegKey) { continue }
+
+                        $SubKeyPath = $Setting["SubKey"] -replace "{APPLICATION}",$Application
+                        $RegKeyPath = Join-Path -Path $RootKey -ChildPath $SubKeyPath
+                        $RegValue = $Setting["Value"]
+                        $RegData = (Get-ItemProperty -Path "Registry::$($RegKeyPath)" -Name $RegValue -ErrorAction SilentlyContinue).$RegValue
+
+                        if ($null -eq $RegData) {
+                            $DescriptionIndex = [UInt32] $Setting["Default"]
+                        }
+                        else {
+                            $DescriptionIndex = [UInt32] $RegData
+                        }
+
+                        $Description = $Setting["Descriptions"][$DescriptionIndex]
+
+                        $Result = New-Object -TypeName PSObject
+                        $Result | Add-Member -MemberType "NoteProperty" -Name "Application" -Value $Application
+                        $Result | Add-Member -MemberType "NoteProperty" -Name "Version" -Value $Version
+                        $Result | Add-Member -MemberType "NoteProperty" -Name "Key" -Value "$($RegKey)"
+                        $Result | Add-Member -MemberType "NoteProperty" -Name "Value" -Value "$($RegValue)"
+                        $Result | Add-Member -MemberType "NoteProperty" -Name "Data" -Value $RegData
+                        $Result | Add-Member -MemberType "NoteProperty" -Name "Description" -Value $Description
+                        $AllResults += $Result
+                    }
+                }
+
+                foreach ($Application in $Applications) {
+
+                    $TrustedLocations = @()
+
+                    $RegKeyPath = Join-Path -Path $RootKey -ChildPath "$($Application)\Security\Trusted Locations"
+                    Get-ChildItem -Path "registry::$($RegKeyPath)" -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -like "Location*" } | ForEach-Object {
+
+                        $Path = (Get-ItemProperty -Path "registry::$($_.Name)" -Name "Path" -ErrorAction SilentlyContinue)."Path"
+                        $TrustedLocations += $Path
+                    }
+
+                    $Result = New-Object -TypeName PSObject
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Application" -Value $Application
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Version" -Value $Version
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Key" -Value $RegKeyPath
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Value" -Value $null
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Data" -Value $TrustedLocations
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Description" -Value "Trusted Locations count: $($TrustedLocations.Length)"
+                    $AllResults += $Result
+                }
+            }
+        }
+
+        $AllResults
+    }
+}
