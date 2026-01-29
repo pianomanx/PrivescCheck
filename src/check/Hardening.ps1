@@ -1230,3 +1230,93 @@ function Invoke-ClickOnceTrustPromptBehaviorCheck {
         $CheckResult
     }
 }
+
+function Invoke-OfficeMacroConfigurationCheck {
+    <#
+    .SYNOPSIS
+    Check whether Office macros are enabled or disabled with a notification
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This cmdlet retrieves macro settings for each supported Office product and reports the configuration as vulnerable is macros are enabled or if they are disabled with a notification.
+
+    .EXAMPLE
+    PS C:\> Invoke-OfficeMacroConfigurationCheck
+
+    Application : Word
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Word
+    Value       : VBAWarnings
+    Data        : 2
+    Description : Disable all macros with notification (default)
+    Vulnerable  : True
+
+    Application : Excel
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Excel
+    Value       : VBAWarnings
+    Data        : 2
+    Description : Disable all macros with notification (default)
+    Vulnerable  : True
+
+    ...
+
+    Application : Excel
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Excel
+    Value       : XL4MacroWarningFollowVBA
+    Data        : 0
+    Description : Excel 4.0 macros disabled (default)
+    Vulnerable  : False
+    #>
+
+    [CmdletBinding()]
+    param (
+        [UInt32] $BaseSeverity
+    )
+
+    process {
+        $AllResults = @()
+        $GlobalVulnerable = $false
+        $MacroSettings = Get-MicrosoftOfficeTrustCenterConfiguration | Where-Object { ($_.Value -eq "VBAWarnings") -or ($_.Value -eq "XL4MacroWarningFollowVBA") }
+
+        foreach ($MacroSetting in $MacroSettings) {
+
+            $Vulnerable = $false
+
+            switch ($MacroSetting.Value) {
+
+                "VBAWarnings" {
+                    if ($null -ne $MacroSetting.Data) {
+                        if (($MacroSetting.Data -eq 1) -or ($MacroSetting.Data -eq 2)) {
+                            $Vulnerable = $true
+                        }
+                    }
+                    else {
+                        $Vulnerable = $true
+                    }
+                }
+
+                "XL4MacroWarningFollowVBA" {
+                    if ($null -ne $MacroSetting.Data) {
+                        if ($MacroSetting.Data -eq 1) {
+                            $Vulnerable = $true
+                        }
+                    }
+                }
+            }
+
+            if ($Vulnerable) { $GlobalVulnerable = $true }
+
+            $MacroSetting | Add-Member -MemberType "NoteProperty" -Name "Vulnerable" -Value $Vulnerable
+            $AllResults += $MacroSetting
+        }
+
+        $CheckResult = New-Object -TypeName PSObject
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($GlobalVulnerable) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult
+    }
+}
