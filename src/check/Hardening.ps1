@@ -1320,3 +1320,76 @@ function Invoke-OfficeMacroConfigurationCheck {
         $CheckResult
     }
 }
+
+function Invoke-OfficeProtectedViewConfigurationCheck {
+    <#
+    .SYNOPSIS
+    Check whether Office Protected View is enabled on all supported applications
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This cmdlet checks whether all three Protected View parameters are enabled (default) in Word, Excel and PowerPoint.
+
+    .EXAMPLE
+    PS C:\> Invoke-OfficeProtectedViewConfigurationCheck
+
+    Application : Word
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Word
+    Value       : DisableInternetFilesInPV
+    Data        : 0
+    Description : Protected View for files originating from the Internet is enabled (default)
+    Vulnerable  : False
+
+    Application : Excel
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Excel
+    Value       : DisableInternetFilesInPV
+    Data        :
+    Description : Protected View for files originating from the Internet is enabled (default)
+    Vulnerable  : False
+
+    Application : PowerPoint
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\PowerPoint
+    Value       : DisableInternetFilesInPV
+    Data        :
+    Description : Protected View for files originating from the Internet is enabled (default)
+    Vulnerable  : False
+    #>
+
+    [CmdletBinding()]
+    param (
+        [UInt32] $BaseSeverity
+    )
+
+    process {
+        $AllResults = @()
+        $GlobalVulnerable = $false
+
+        $ProtectedViewSettings = Get-MicrosoftOfficeTrustCenterConfiguration | Where-Object {
+            ($_.Value -eq "DisableInternetFilesInPV") -or ($_.Value -eq "DisableUnsafeLocationsInPV") -or ($_.Value -eq "DisableAttachmentsInPV")
+        }
+
+        foreach ($ProtectedViewSetting in $ProtectedViewSettings) {
+
+            $Vulnerable = $false
+
+            if (($null -ne $ProtectedViewSetting.Data) -and ($ProtectedViewSetting.Data -eq 1)) {
+                $Vulnerable = $true
+            }
+
+            if ($Vulnerable) { $GlobalVulnerable = $true }
+
+            $ProtectedViewSetting | Add-Member -MemberType "NoteProperty" -Name "Vulnerable" -Value $Vulnerable
+            $AllResults += $ProtectedViewSetting
+        }
+
+        $CheckResult = New-Object -TypeName PSObject
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($GlobalVulnerable) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult
+    }
+}
