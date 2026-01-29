@@ -1393,3 +1393,93 @@ function Invoke-OfficeProtectedViewConfigurationCheck {
         $CheckResult
     }
 }
+
+function Invoke-OfficeTrustedLocationsCheck {
+    <#
+    .SYNOPSIS
+    Check whether Office Trusted Locations are enabled and whether they contain any directory modifiable as the current user
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This cmdlet retrieves the Office Trust Center configuration and then iterates over each Office application to determine whether their Trusted Locations are enabled. If so, it iterates over its list of allowed paths and checks whether they are modifiable as a current user. If Trusted Locations are not disabled globally and if at least one modifiable path is found, the Office application is considered vulnerable.
+
+    .EXAMPLE
+    PS C:\> Invoke-OfficeTrustedLocationsCheck
+
+    Application : Word
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Word
+    Value       : AllLocationsDisabled
+    Data        : 0
+    Description : Enable Trusted Locations (default)
+
+    Application : Word
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Word
+    Value       : AllowNetworkLocations
+    Data        : 0
+    Description : Do not allow Trusted Locations on my network (default)
+
+    Application : Word
+    Version     : 16.0
+    Key         : HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Word\Security\Trusted Locations
+    Value       : TrustedLocations
+    Data        : C:\Users\Admin\AppData\Roaming\Microsoft\Templates; C:\Program Files\Microsoft Office\root\Templates\; C:\Users\Admin\AppData\Roaming\Microsoft\Word\Startup
+    Description : Trusted Locations count: 3
+    Modifiable  : C:\Users\Admin\AppData\Roaming\Microsoft\Templates; C:\Users\Admin\AppData\Roaming\Microsoft\Word\Startup
+
+    ...
+    #>
+
+    [CmdletBinding()]
+    param (
+        [UInt32] $BaseSeverity
+    )
+
+    process {
+        $AllResults = @()
+        $Vulnerable = $False
+        $TrustedLocationSettings = Get-MicrosoftOfficeTrustCenterConfiguration | Where-Object {
+            $_.Value -eq "AllLocationsDisabled" -or $_.Value -eq "AllowNetworkLocations" -or $_.Value -eq "TrustedLocations"
+        }
+
+        $Applications = [String[]] ($TrustedLocationSettings | Select-Object -ExpandProperty "Application" -Unique)
+
+        foreach ($Application in $Applications) {
+
+            $AllLocationsDisabled = $TrustedLocationSettings | Where-Object { $_.Application -eq $Application -and $_.Value -eq "AllLocationsDisabled" }
+            if ($AllLocationsDisabled.Data -eq 1) {
+                continue
+            }
+
+            $TrustedLocations = $TrustedLocationSettings | Where-Object { $_.Application -eq $Application -and $_.Value -eq "TrustedLocations" }
+            $TrustedLocationsModifiable = @()
+
+            foreach ($TrustedLocation in ([String[]] $TrustedLocations.Data)) {
+
+                Get-ModifiablePath -Path $TrustedLocation | Where-Object { $_ -and (-not [String]::IsNullOrEmpty($_.ModifiablePath)) } | ForEach-Object {
+                    $TrustedLocationsModifiable += $_.ModifiablePath
+                }
+            }
+
+            $TrustedLocationsModifiable = [String[]] ($TrustedLocationsModifiable | Select-Object -Unique)
+
+            $TrustedLocations.Data = $($TrustedLocations.Data -join "; ")
+            if ($TrustedLocationsModifiable) {
+                $Vulnerable = $True
+                $TrustedLocations | Add-Member -MemberType "NoteProperty" -Name "Modifiable" -Value $($TrustedLocationsModifiable -join "; ")
+            }
+
+            $AllResults += $TrustedLocationSettings | Where-Object { $_.Application -eq $Application -and $_.Value -eq "AllLocationsDisabled" }
+            $AllResults += $TrustedLocationSettings | Where-Object { $_.Application -eq $Application -and $_.Value -eq "AllowNetworkLocations" }
+            $AllResults += $TrustedLocations
+        }
+
+        $CheckResult = New-Object -TypeName PSObject
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($Vulnerable) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult
+    }
+}

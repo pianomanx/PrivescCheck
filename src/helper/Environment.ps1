@@ -1866,7 +1866,7 @@ function Get-MicrosoftOfficeTrustCenterConfiguration {
                     $Result | Add-Member -MemberType "NoteProperty" -Name "Application" -Value $Application
                     $Result | Add-Member -MemberType "NoteProperty" -Name "Version" -Value $Version
                     $Result | Add-Member -MemberType "NoteProperty" -Name "Key" -Value $RegKeyPath
-                    $Result | Add-Member -MemberType "NoteProperty" -Name "Value" -Value $null
+                    $Result | Add-Member -MemberType "NoteProperty" -Name "Value" -Value "TrustedLocations"
                     $Result | Add-Member -MemberType "NoteProperty" -Name "Data" -Value $TrustedLocations
                     $Result | Add-Member -MemberType "NoteProperty" -Name "Description" -Value "Trusted Locations count: $($TrustedLocations.Length)"
                     $AllResults += $Result

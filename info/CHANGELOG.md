@@ -7,6 +7,7 @@
 - Add a helper function for enumerating Microsoft Office Trust Center security settings.
 - Add a check for Microsoft Office macro execution settings.
 - Add a check for Microsoft Office Protected View settings.
+- Add a check for Microsoft Office Trusted Locations.
 
 ## 2026-01-28
 
