@@ -2,21 +2,19 @@
 
 Quickly identify common Windows **vulnerabilities** and **configuration issues** that are not necessarily covered by public security standards, and collect useful information for exploitation and post-exploitation tasks.
 
-> :information_source: Although this tool is primarily intended for pentesters, it can (and should) also be used by defenders to identify weaknesses on Windows endpoints.
+> [!IMPORTANT]
+> A major aspect to be aware of when using this tool is that all access control checks are done in the context of the current user. Therefore, if it is run with administrator privileges, a lot of vulnerability checks are actually skipped to avoid generating incorrect findings.
 
 ## :rocket: Quick Start
 
-:warning: The script **IS NO LONGER** available in the repository, check out the [latest release](https://github.com/itm4n/PrivescCheck/releases/latest/) instead.
-
 Download the script here: [PrivescCheck.ps1](https://github.com/itm4n/PrivescCheck/releases/latest/download/PrivescCheck.ps1)
 
-> :information_source: The link above can also be used directly in a PowerShell terminal with `(New-Object Net.WebClient).DownloadString(...)`.
-
-Below are 3 typical use cases for the tool, but of course you can "mix and match" the options as you wish.
+> [!TIP]
+> The link above can also be used directly in a PowerShell terminal with `(New-Object Net.WebClient).DownloadString(...)`.
 
 ### Use Case 1 (Pentest): Run Basic Checks Only
 
-:dart: **Objective:** I want to know if there is any obvious way I can escalate my privileges.
+Is there an obvious way to escalate privileges locally?
 
 ```bat
 powershell -ep bypass -c ". .\PrivescCheck.ps1; Invoke-PrivescCheck"
@@ -24,7 +22,7 @@ powershell -ep bypass -c ". .\PrivescCheck.ps1; Invoke-PrivescCheck"
 
 ### Use Case 2 (Research): Run Extended Checks + Write Human-Readable Reports
 
-:dart: **Objective**: There is no obvious vulnerability, but I want to dig a little further (and potentially find an 0-day in some third-party software for instance).
+Is there additional information that can be leveraged for post-exploitation or for finding vulnerabilities in third-party software?
 
 ```bat
 powershell -ep bypass -c ". .\PrivescCheck.ps1; Invoke-PrivescCheck -Extended -Report PrivescCheck_$($env:COMPUTERNAME) -Format TXT,HTML"
@@ -32,7 +30,7 @@ powershell -ep bypass -c ". .\PrivescCheck.ps1; Invoke-PrivescCheck -Extended -R
 
 ### Use Case 3 (Audit): Run All Checks + Write All Reports
 
-:dart: **Objective**: I want to further scan the machine in case there are configuration issues that are not covered by common security standards, and optionally feed the results into an automated reporting tool.
+Are there configuration issues that are not covered by common security standards?
 
 ```bat
 powershell -ep bypass -c ". .\PrivescCheck.ps1; Invoke-PrivescCheck -Extended -Audit -Report PrivescCheck_$($env:COMPUTERNAME) -Format TXT,HTML,CSV,XML"
@@ -95,7 +93,8 @@ Use the option `-Report <PREFIX>` with `-Format HTML` to specify that you want t
 
 Use the option `-Report <PREFIX>` with `-Format CSV` or `-Format XML` to specify that you want to generate a **CSV or XML report**. The output file is intended to facilitate the parsing of the results by automated reporting tools.
 
-:information_source: Although the output format is not documented (yet), you can easily figure it out by analyzing the structure of an already generated file. You can use the `Id` value of each check to uniquely identify them.
+> [!NOTE]
+> Although the output format is not documented (yet), you can easily figure it out by analyzing the structure of an already generated file. You can use the `Id` value of each check to uniquely identify them.
 
 ### Check Type > Base
 
@@ -130,7 +129,8 @@ Get-Content .\PrivescCheck.ps1 | Out-String | Invoke-Expression
 
 A common way to bypass [Constrained Language Mode](https://devblogs.microsoft.com/powershell/powershell-constrained-language-mode/) consists in using PSv2 as it does not implement this protection. Therefore, a significant part of the development effort goes into maintaining this retro-compatibility.
 
-> :information_source: Although PowerShell version 2 ~~is still enabled by default on recent versions of Windows~~ ([PowerShell 2.0 removal from Windows](https://support.microsoft.com/en-us/topic/powershell-2-0-removal-from-windows-fe6d1edc-2ed2-4c33-b297-afe82a64200a)), it cannot run without the .Net framework version 2.0, which requires a manual install.
+> [!NOTE]
+> Although PowerShell version 2 ~~is still enabled by default on recent versions of Windows~~ ([PowerShell 2.0 removal from Windows](https://support.microsoft.com/en-us/topic/powershell-2-0-removal-from-windows-fe6d1edc-2ed2-4c33-b297-afe82a64200a)), it cannot run without the .Net framework version 2.0, which requires a manual install.
 
 ### Metasploit timeout
 
