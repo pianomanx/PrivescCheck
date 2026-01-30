@@ -1171,10 +1171,16 @@ function Invoke-ProcessAndThreadPermissionCheck {
     }
 
     process {
+        $Processes = [Object[]] (Get-SystemInformationProcessAndThread)
 
-        $Processes = Get-SystemInformationProcessAndThread
+        $ProgressCount = 0
+        Write-Progress -Activity "Checking process and thread permissions (0/$($Processes.Count))..." -Status "0% Complete:" -PercentComplete 0
 
         foreach ($Process in $Processes) {
+
+            $ProgressPercent = [UInt32] ($ProgressCount * 100 / $Processes.Count)
+            Write-Progress -Activity "Checking process and thread permissions ($($ProgressCount)/$($Processes.Count)): PID=$($Process.ProcessId)" -Status "$($ProgressPercent)% Complete:" -PercentComplete $ProgressPercent
+            $ProgressCount += 1
 
             # Check the permissions of the process first. Filter out processes owned by the
             # current user.
@@ -1213,6 +1219,8 @@ function Invoke-ProcessAndThreadPermissionCheck {
                 }
             }
         }
+
+        Write-Progress -Activity "Checking process and thread permissions ($($Processes.Count)/$($Processes.Count))..." -Status "100% Complete:" -Completed
 
         $CheckResult = New-Object -TypeName PSObject
         $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
