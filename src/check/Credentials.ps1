@@ -810,29 +810,24 @@ function Invoke-ScomRunAsAccountCredentialCheck {
 
     process {
         $AllResults = @()
+        $Accounts = @()
+        $OperationsManagerEventLogs = Get-WinEvent -LogName "Operations Manager" -ErrorAction SilentlyContinue
 
-        try {
-            $OperationsManagerEventLogs = Get-EventLog -LogName "Operations Manager"
-            $Accounts = @()
-            foreach ($OperationsManagerEventLog in $OperationsManagerEventLogs) {
+        foreach ($OperationsManagerEventLog in $OperationsManagerEventLogs) {
 
-                if ($OperationsManagerEventLog.Message -match ".*on the RunAs account (.+) for management group") {
+            if ($OperationsManagerEventLog.Message -match ".*on the RunAs account (.+) for management group") {
 
-                    $AccountName = $Matches[1]
-                    if ($Accounts -contains $AccountName) { continue }
-                    $Accounts += $AccountName
+                $AccountName = $Matches[1]
+                if ($Accounts -contains $AccountName) { continue }
+                $Accounts += $AccountName
 
-                    $Result = New-Object -TypeName PSObject
-                    $Result | Add-Member -MemberType "NoteProperty" -Name "EventID" -Value $OperationsManagerEventLog.EventID
-                    $Result | Add-Member -MemberType "NoteProperty" -Name "TimeGenerated" -Value $(Convert-DateToString -Date $OperationsManagerEventLog.TimeGenerated -IncludeTime)
-                    $Result | Add-Member -MemberType "NoteProperty" -Name "Account" -Value $AccountName
-                    $Result | Add-Member -MemberType "NoteProperty" -Name "Message" -Value $OperationsManagerEventLog.Message
-                    $AllResults += $Result
-                }
+                $Result = New-Object -TypeName PSObject
+                $Result | Add-Member -MemberType "NoteProperty" -Name "Id" -Value $OperationsManagerEventLog.Id
+                $Result | Add-Member -MemberType "NoteProperty" -Name "TimeCreated" -Value $(Convert-DateToString -Date $OperationsManagerEventLog.TimeCreated -IncludeTime)
+                $Result | Add-Member -MemberType "NoteProperty" -Name "Account" -Value $AccountName
+                $Result | Add-Member -MemberType "NoteProperty" -Name "Message" -Value $OperationsManagerEventLog.Message
+                $AllResults += $Result
             }
-        }
-        catch {
-            Write-Verbose "Event log 'Operations Manager' not found."
         }
 
         $CheckResult = New-Object -TypeName PSObject

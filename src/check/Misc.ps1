@@ -110,40 +110,32 @@ function Invoke-SystemStartupHistoryCheck {
         [UInt32] $BaseSeverity
     )
 
-    $Results = @()
+    process {
+        $Results = @()
 
-    try {
         $TimeSpanInDays = 31
-        $SystemStartupHistoryResult = New-Object -TypeName System.Collections.ArrayList
-
+        $SystemStartupHistoryResult = @()
         $StartDate = (Get-Date).AddDays(-$TimeSpanInDays)
         $EndDate = Get-Date
-
-        $StartupEvents = Get-EventLog -LogName "System" -EntryType "Information" -After $StartDate -Before $EndDate | Where-Object { $_.EventID -eq 6005 }
-
+        $StartupEvents = Get-WinEvent -LogName "System" -ErrorAction SilentlyContinue | Where-Object { ($_.Id -eq 6005) -and ($_.TimeCreated -ge $StartDate) -and ($_.TimeCreated -le $EndDate) }
         $EventNumber = 1
 
         foreach ($StartupEvent in $StartupEvents) {
 
             $Result = New-Object -TypeName PSObject
             $Result | Add-Member -MemberType "NoteProperty" -Name "Index" -Value $EventNumber
-            $Result | Add-Member -MemberType "NoteProperty" -Name "Time" -Value "$(Convert-DateToString -Date $StartupEvent.TimeGenerated -IncludeTime)"
-
-            [void] $SystemStartupHistoryResult.Add($Result)
+            $Result | Add-Member -MemberType "NoteProperty" -Name "Time" -Value "$(Convert-DateToString -Date $StartupEvent.TimeCreated -IncludeTime)"
+            $SystemStartupHistoryResult += $Result
             $EventNumber += 1
         }
 
         $Results += $SystemStartupHistoryResult | Select-Object -First 10
-    }
-    catch {
-        # We might get an "access denied"
-        Write-Verbose "Error while querying the Event Log."
-    }
 
-    $Result = New-Object -TypeName PSObject
-    $Result | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $Results
-    $Result | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($Results) { $BaseSeverity } else { $script:SeverityLevel::None })
-    $Result
+        $Result = New-Object -TypeName PSObject
+        $Result | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $Results
+        $Result | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($Results) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $Result
+    }
 }
 
 function Invoke-SystemDriveCheck {
