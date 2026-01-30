@@ -68,7 +68,7 @@ function Invoke-Build {
         }
 
         $ScriptFilename = "$($BuildProfileObject.Name).ps1"
-        $ScriptPath = Join-Path -Path $RootPath -ChildPath "release\$($ScriptFilename)"
+        $ScriptPath = Join-Path -Path $RootPath -ChildPath "dist\$($ScriptFilename)"
         $ScriptContent = ""
         $ErrorCount = 0
         $Modules = @()

@@ -17,15 +17,18 @@ concurrency:
 #
 # Below, we are building the following chain:
 #
-# -> Update data files and commit changes (if needed)
-#    -> Get release tag to apply to next release
-#       -> Build scripts and create new release
+#  1. Update data files and commit changes (if needed)
+#  2. Get release tag to apply to next release
+#  3. Build PrivescCheck.ps1
+#  4. Generate changelog
+#  5. Create release
 #
 # Notes:
-# - if we fail to update data files for some reason, we still want to be
-#   able to build the scripts.
-# - if the action is triggered because it was scheduled, we want to create
-#   a new release only if data has been updated.
+#
+#  - if we fail to update data files for some reason, we still want to be
+#    able to build the scripts.
+#  - if the action is triggered because it was scheduled, we want to create
+#    a new release only if data has been updated.
 #
 
 jobs:
@@ -78,9 +81,33 @@ jobs:
         run: |
           echo "release-tag=$(bash ./.github/workflows/get_release_tag.sh)" >> "$GITHUB_OUTPUT"
 
-  build-scripts:
+  build-script:
     name: Build PrivescCheck
-    needs: [update-data, get-release-tag]
+    needs: [update-data]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out master branch
+        uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Build PrivescCheck script
+        shell: pwsh
+        run: |
+          . ./build/Build.ps1
+          Invoke-Build -Name "PrivescCheck" -NoNewSeed
+      - name: Upload script artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: artifact-script
+          path: dist/PrivescCheck.ps1
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
+  create-changelog:
+    name: Create Changelog
+    needs: [update-data]
     runs-on: ubuntu-latest
     steps:
       - name: Check out master branch
@@ -105,12 +132,36 @@ jobs:
           else
             changelog_content="N/A"
           fi
-          echo -ne "# Changelog\n\n${changelog_content}\n" > ./release/changelog.md
-      - name: Build PrivescCheck script
-        shell: pwsh
-        run: |
-          . ./build/Build.ps1
-          Invoke-Build -Name "PrivescCheck" -NoNewSeed
+          echo -ne "# Changelog\n\n${changelog_content}\n" > ./dist/changelog.md
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: artifact-changelog
+          path: dist/changelog.md
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
+  create-release:
+    name: Create release
+    needs: [update-data, build-script, create-changelog, get-release-tag]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out master branch
+        uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Download script artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: artifact-script
+          path: dist/
+      - name: Download changelog artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: artifact-changelog
+          path: dist/
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -131,13 +182,13 @@ jobs:
             create_release=1
           fi
           if [[ $create_release == 1 ]]; then
-            changelog_path="./release/changelog.md"
+            changelog_path="./dist/changelog.md"
             if [[ -f "${changelog_path}" ]]; then
               echo "[*] Changelog file found: ${changelog_path}"
-              gh release create "${RELEASE_TAG}" --notes-file "${changelog_path}" ./release/*.ps1
+              gh release create "${RELEASE_TAG}" --notes-file "${changelog_path}" ./dist/*.ps1
             else
               echo "[!] Changelog file not found"
-              gh release create "${RELEASE_TAG}" ./release/*.ps1
+              gh release create "${RELEASE_TAG}" ./dist/*.ps1
             fi
           else
             echo "[*] No release to create"
