@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-01
+
+### Added
+
+- Add check for CVE-2026-26128 (SMB signing required for loopback connections) in SMB server configuration.
+
 ## 2026-04-29
 
 ### Modified

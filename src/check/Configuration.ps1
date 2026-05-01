@@ -934,6 +934,11 @@ function Invoke-SmbConfigurationCheck {
             "Security signature (SMB signing) is required."
         )
 
+        $RequireSecuritySignatureForLoopbackDescriptions = @(
+            "Security signature (SMB signing) for loopback is not required.",
+            "Security signature (SMB signing) for loopback is required."
+        )
+
         $SmbServerNameHardeningLevelDescriptions = @(
             "Off (default). An SPN does not need to be sent by the SMB client. It is not required or validated by the SMB server.",
             "Accept if provided by client. If an SPN name is sent by the SMB client, it must match the SMB server's list of SPNs, otherwise the access is denied."
@@ -946,6 +951,7 @@ function Invoke-SmbConfigurationCheck {
 
     process {
 
+        $Severity = $BaseSeverity
         $Vulnerable = $false
 
         # Server - SMBv1 should not be enabled
@@ -971,6 +977,53 @@ function Invoke-SmbConfigurationCheck {
         $ServerSigning | Add-Member -MemberType "NoteProperty" -Name "Expected" -Value "<True>"
         $ServerSigning | Add-Member -MemberType "NoteProperty" -Name "Description" -Value $($RequireSecuritySignatureDescriptions[$($ServerConfiguration.RequireSecuritySignature -as [UInt32])])
         $AllResults += $ServerSigning
+
+        # Check patch for CVE-2026-26128: Windows SMB Server Elevation of Privilege Vulnerability
+        # https://www.synacktiv.com/publications/bypassing-windows-authentication-reflection-mitigations-for-system-shells-part.html
+        # The patch enforces SMB signature for local connections (i.e. "loopback"). The
+        # protection can be disabled by setting the following value in the registry.
+        #
+        #   HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters
+        #   RequireSecuritySignatureForLoopback (DWORD) = 0
+        #
+        # If SMB signing is already enforced (RequireSecuritySignature), there is no need
+        # to check this value.
+        if ($ServerConfiguration.RequireSecuritySignature -ne $true) {
+
+            $RegKeyPath = "HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters"
+            $RegValue = "RequireSecuritySignatureForLoopback"
+            $RegData = (Get-ItemProperty -Path "Registry::$($RegKeyPath)" -Name $RegValue -ErrorAction SilentlyContinue).$RegValue
+
+            # If the value "RequireSecuritySignatureForLoopback" exists, we need to check its
+            # data. If it does not exist, we assume the configuration is safe. This may cause
+            # false negatives if the OS is not up-to-date or no longer supported. However, this
+            # is acceptable because such issues would be reported by other checks anyway. This
+            # is a simplification that eliminates false positives.
+            if ($null -ne $RegData) {
+                if ($RegData -gt 0) {
+                    # If the data is greater than 0, the protection is enabled.
+                    $RequireSecuritySignatureForLoopback = $true
+                }
+                else {
+                    # If the data is 0, the protection was explicitly disabled.
+                    $RequireSecuritySignatureForLoopback = $false
+                    $Vulnerable = $true
+                    $Severity = $script:SeverityLevel::High
+                }
+
+                $ServerSigningLoopback = New-Object -TypeName PSObject
+                $ServerSigningLoopback | Add-Member -MemberType "NoteProperty" -Name "Role" -Value "Server"
+                $ServerSigningLoopback | Add-Member -MemberType "NoteProperty" -Name "Parameter" -Value "RequireSecuritySignatureForLoopback"
+                $ServerSigningLoopback | Add-Member -MemberType "NoteProperty" -Name "Value" -Value $RequireSecuritySignatureForLoopback
+                $ServerSigningLoopback | Add-Member -MemberType "NoteProperty" -Name "Expected" -Value "<True>"
+                $ServerSigningLoopback | Add-Member -MemberType "NoteProperty" -Name "Description" -Value $($RequireSecuritySignatureForLoopbackDescriptions[$($RequireSecuritySignatureForLoopback -as [UInt32])])
+                $AllResults += $ServerSigningLoopback
+            }
+            # If the value "RequireSecuritySignatureForLoopback" does not exist, it is better
+            # not to conclude anything, because we don't check whether the host is up-to-date
+            # or even supported here. Therefore, we could wrongly assume that it is not
+            # vulnerable.
+        }
 
         # Server - Server SPN target name validation should be enabled
         # This setting is recommended only as a workaround for cases where SMB signing
@@ -1002,7 +1055,7 @@ function Invoke-SmbConfigurationCheck {
 
         $CheckResult = New-Object -TypeName PSObject
         $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
-        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($Vulnerable) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($Vulnerable) { $Severity } else { $script:SeverityLevel::None })
         $CheckResult
     }
 }
