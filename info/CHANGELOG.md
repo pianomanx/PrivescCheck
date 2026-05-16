@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-16
+
+### Fixed
+
+- Add TPM vendor ID "VMW" (VMWare) to Get-TpmDeviceType (issue #86).
+
 ## 2026-05-01
 
 ### Added

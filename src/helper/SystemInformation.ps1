@@ -584,7 +584,7 @@ function Get-TpmDeviceType {
         $DiscreteTpmVendorIds = @("ATML", "CSCO", "FLYS", "IFX", "NSG", "NSM ", "NTC", "NTZ", "SEAL", "SNS", "STM ", "WEC")
         $IntegratedTpmVendorIds = @("BRCM", "INTC", "ROCC", "SMSC", "TXN")
         $FirmwareTpmVendorIds = @("AMD", "HISI", "HPE", "INTC", "LEN", "QCOM", "SECE", "SMSN")
-        $VirtualTpmVendorIds = @("IBM", "GOOG", "MSFT")
+        $VirtualTpmVendorIds = @("IBM", "GOOG", "MSFT", "VMW")
         $TpmType = $script:TPM_DEVICE_TYPE::Unknown
     }
 
