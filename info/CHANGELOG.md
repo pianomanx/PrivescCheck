@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-27
+
+### Modified
+
+- Add start and stop access rights to third-party service enumeration.
+
 ## 2026-05-16
 
 ### Fixed

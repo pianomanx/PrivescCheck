@@ -22,12 +22,39 @@ function Invoke-InstalledServiceCheck {
         [UInt32] $BaseSeverity
     )
 
-    $Results = Get-ServiceFromRegistry -FilterLevel 3 | Select-Object -Property Name, DisplayName, ImagePath, User, StartMode
+    begin {
+        $StartStopRights = @(
+            $script:ServiceAccessRight::Start,
+            $script:ServiceAccessRight::Stop
+        )
+    }
 
-    $Result = New-Object -TypeName PSObject
-    $Result | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $Results
-    $Result | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($Results) { $BaseSeverity } else { $script:SeverityLevel::None })
-    $Result
+    process {
+        $AllResults = @()
+        $AllServices = Get-ServiceFromRegistry -FilterLevel 3
+
+        foreach ($Service in $AllServices) {
+
+            $AllAccessRights = @()
+
+            Get-ObjectAccessRight -Name $Service.Name -Type Service -AccessRights $StartStopRights | ForEach-Object {
+                $_.Permissions | ForEach-Object {
+                    if ($StartStopRights -contains $_) { $AllAccessRights += $_ }
+                }
+            }
+
+            $ServiceItem = $Service | Select-Object -Property Name,DisplayName,ImagePath,User,StartMode
+            $ServiceItem | Add-Member -MemberType "NoteProperty" -Name "UserCanStart" -Value ($AllAccessRights -contains "Start")
+            $ServiceItem | Add-Member -MemberType "NoteProperty" -Name "UserCanStop" -Value ($AllAccessRights -contains "Stop")
+
+            $AllResults += $ServiceItem
+        }
+
+        $CheckResult = New-Object -TypeName PSObject
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($AllResults) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult
+    }
 }
 
 function Invoke-ServiceRegistryPermissionCheck {
