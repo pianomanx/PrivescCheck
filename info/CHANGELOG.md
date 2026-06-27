@@ -2,6 +2,10 @@
 
 ## 2026-06-27
 
+### Added
+
+- Add a check for extended service registry setting permissions.
+
 ### Modified
 
 - Add start and stop access rights to third-party service enumeration.

@@ -121,6 +121,102 @@ function Invoke-ServiceRegistryPermissionCheck {
     }
 }
 
+function Invoke-ServiceRegistryPermissionExCheck {
+    <#
+    .SYNOPSIS
+    Checks the permissions of services' registry sub-keys.
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This check aims to enumerate the service registry keys that can be modified by low-privileged users.
+
+    .EXAMPLE
+    PS C:\> Invoke-ServiceRegistryPermissionExCheck
+
+    Name              : embeddedmode
+    DisplayName       : @C:\WINDOWS\system32\embeddedmodesvc.dll,-201
+    StartMode         : Manual
+    ImagePath         : C:\WINDOWS\System32\svchost.exe -k LocalSystemNetworkRestricted -p
+    User              : LocalSystem
+    ModifiablePath    : HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\embeddedmode\Parameters
+    IdentityReference : NT AUTHORITY\Authenticated Users (S-1-5-11)
+    Permissions       : QueryValue, CreateSubKey, EnumerateSubKeys, Notify, ReadControl, GenericRead
+    Status            : Stopped
+    UserCanStart      : True
+    UserCanStop       : False
+
+    ...
+
+    .NOTES
+    A typical access right that low-privileged users may have is "CreateSubKey". This access right could be abused to create registry symbolic links, for instance.
+    #>
+
+    [CmdletBinding()]
+    param (
+        [UInt32] $BaseSeverity
+    )
+
+    begin {
+        $StartStopRights = @(
+            $script:ServiceAccessRight::Start,
+            $script:ServiceAccessRight::Stop
+        )
+    }
+
+    process {
+        $AllResults = @()
+
+        # Get all services except the ones with an empty ImagePath or Drivers
+        $AllServices = Get-ServiceFromRegistry -FilterLevel 2
+
+        foreach ($Service in $AllServices) {
+
+            $ServiceStatus = $null
+            $UserCanStart = $null
+            $UserCanStop = $null
+
+            Get-ChildItem -Path "registry::$($Service.RegistryPath)" -ErrorAction SilentlyContinue | ForEach-Object {
+
+                $ServiceSubKeyPath = $_.Name
+
+                Get-ObjectAccessRight -Name $ServiceSubKeyPath -Type RegistryKey | Where-Object { $_ -and (-not [String]::IsNullOrEmpty($_.ModifiablePath)) } | Foreach-Object {
+
+                    if ($null -eq $ServiceStatus) {
+                        $ServiceStatus = Get-ServiceStatus -Name $Service.Name
+                    }
+
+                    if (($null -eq $UserCanStart) -or ($null -eq $UserCanStop)) {
+                        $ServiceStartStopRights = @()
+                        Get-ObjectAccessRight -Name $Service.Name -Type Service -AccessRights $StartStopRights | ForEach-Object {
+                            $_.Permissions | ForEach-Object {
+                                if ($StartStopRights -contains $_) { $ServiceStartStopRights += $_ }
+                            }
+                        }
+                        $UserCanStart = $ServiceStartStopRights -contains "Start"
+                        $UserCanStop = $ServiceStartStopRights -contains "Stop"
+                    }
+
+                    $VulnerableService = $Service | Select-Object -Property Name,StartMode,ImagePath,User
+                    $VulnerableService | Add-Member -MemberType "NoteProperty" -Name "ModifiablePath" -Value $ServiceSubKeyPath
+                    $VulnerableService | Add-Member -MemberType "NoteProperty" -Name "IdentityReference" -Value $_.IdentityReference
+                    $VulnerableService | Add-Member -MemberType "NoteProperty" -Name "Permissions" -Value ($_.Permissions -join ", ")
+                    $VulnerableService | Add-Member -MemberType "NoteProperty" -Name "Status" -Value $ServiceStatus
+                    $VulnerableService | Add-Member -MemberType "NoteProperty" -Name "UserCanStart" -Value $UserCanStart
+                    $VulnerableService | Add-Member -MemberType "NoteProperty" -Name "UserCanStop" -Value $UserCanStop
+                    $AllResults += $VulnerableService
+                }
+            }
+        }
+
+        $CheckResult = New-Object -TypeName PSObject
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Result" -Value $AllResults
+        $CheckResult | Add-Member -MemberType "NoteProperty" -Name "Severity" -Value $(if ($AllResults) { $BaseSeverity } else { $script:SeverityLevel::None })
+        $CheckResult
+    }
+}
+
 function Invoke-ServiceUnquotedPathCheck {
     <#
     .SYNOPSIS
