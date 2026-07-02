@@ -819,6 +819,140 @@ function Get-FileHashHex {
     }
 }
 
+function Get-FileAuthenticodeHashHex {
+    <#
+    .SYNOPSIS
+    Compute the Authenticode hash of a PE file.
+
+    Author: @itm4n
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    This cmdlet reads a PE file as a byte array, and parses it to calculate its Authenticode hash.
+
+    .PARAMETER FilePath
+    The path of the file for which we want to compute the hash.
+
+    .PARAMETER Algorithm
+    A hash algorithm: sha1, sha256, sha384, sha512
+
+    .EXAMPLE
+    PS C:\> Get-FileAuthenticodeHashHex -FilePath C:\Windows\System32\drivers\ntfs.sys
+    fdd0afcf8c83f0c4568d607a439016d7445e39a2184c5433dfe8eb2cb0cb483d
+
+    .EXAMPLE
+    PS C:\> Get-FileAuthenticodeHashHex -FilePath C:\Windows\System32\cmd.exe
+    bbae94d3046b99c2ddeaad3b1cf312baed28425c554f336cb8e8226f8930ce33
+
+    .NOTES
+    https://reversea.me/index.php/authenticode-i-understanding-windows-authenticode/
+    https://github.com/mihaly044/pedigest/blob/master/digest.c
+    https://download.microsoft.com/download/9/c/5/9c5b2167-8017-4bae-9fde-d599bac8184a/Authenticode_PE.docx
+    #>
+
+    [OutputType([string])]
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string] $FilePath,
+
+        [ValidateSet("SHA1", "SHA256", "SHA384", "SHA512")]
+        [string] $Algorithm = "SHA256"
+    )
+
+    process {
+        try {
+            $FileBytes = [byte[]] [System.IO.File]::ReadAllBytes($FilePath)
+        }
+        catch {
+            Write-Warning "Failed to read file: $($_.Exception.Message)"
+            return
+        }
+
+        if ([BitConverter]::ToUInt16($FileBytes, 0) -ne 0x5A4D) {
+            Write-Warning "Invalid PE magic bytes: $($FilePath)"
+            return
+        }
+
+        $e_lfanew = [BitConverter]::ToUInt32($FileBytes, 0x3C)
+
+        if ([BitConverter]::ToUInt32($FileBytes, $e_lfanew) -ne 0x00004550) {
+            Write-Warning "Invalid PE signature bytes: $($FilePath)"
+            return
+        }
+
+        $ImageFileHeaderOffset = $e_lfanew + 4
+
+        $ImageOptionalHeaderOffset = $ImageFileHeaderOffset + 20
+        $ImageOptionalHeaderMagic = [BitConverter]::ToUInt16($FileBytes, $ImageOptionalHeaderOffset)
+
+        switch ($ImageOptionalHeaderMagic) {
+
+            0x10B {
+                $ImageOptionalHeaderChecksumOffset = $ImageOptionalHeaderOffset + 64
+                $ImageOptionalHeaderDataDirectoryOffset = $ImageOptionalHeaderOffset + 96
+            }
+
+            0x20B {
+                $ImageOptionalHeaderChecksumOffset = $ImageOptionalHeaderOffset + 64
+                $ImageOptionalHeaderDataDirectoryOffset = $ImageOptionalHeaderOffset + 112
+            }
+
+            default {
+                Write-Warning "Invalid optional header magic bytes ($($ImageOptionalHeaderMagic)): $($FilePath)"
+                return
+            }
+        }
+
+        # DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY] is at index 4 in the DataDirectory array.
+        # The size of an IMAGE_DATA_DIRECTORY structure is 8.
+        $ImageOptionalHeaderSecurityDirectoryOffset = $ImageOptionalHeaderDataDirectoryOffset + 4 * 8
+
+        $SecurityDirectoryVirtualAddress = [BitConverter]::ToUInt32($FileBytes, $ImageOptionalHeaderSecurityDirectoryOffset)
+        $SecurityDirectorySize = [BitConverter]::ToUInt32($FileBytes, $ImageOptionalHeaderSecurityDirectoryOffset + 4)
+
+        $Hash = [System.Security.Cryptography.HashAlgorithm]::Create($Algorithm)
+
+        # Hash everything from the start of the file to the checksum field.
+        $null = $Hash.TransformBlock($FileBytes, 0, $ImageOptionalHeaderChecksumOffset, $null, 0)
+
+        # Skip checksum field.
+        $FileOffset = $ImageOptionalHeaderChecksumOffset + 4
+
+        # Hash everything from after the checksum field to the start of the Security data directory.
+        $null = $Hash.TransformBlock($FileBytes, $FileOffset, $ImageOptionalHeaderSecurityDirectoryOffset - $FileOffset, $null, 0)
+
+        # Skip Security data directory structure.
+        $FileOffset = $ImageOptionalHeaderSecurityDirectoryOffset + 8
+
+        if (($SecurityDirectoryVirtualAddress -eq 0) -or ($SecurityDirectorySize -eq 0)) {
+            # No certificate embedded.
+
+            # Hash everything from after the Security data directory structure to the end of the file.
+            $null = $Hash.TransformBlock($FileBytes, $FileOffset, $FileBytes.Length - $FileOffset, $null, 0)
+        }
+        else {
+            # A certificate is embedded, we must skip it.
+
+            # Hash everything from after the Security data directory structure to the start of the certificate table.
+            $null = $Hash.TransformBlock($FileBytes, $FileOffset, $SecurityDirectoryVirtualAddress - $FileOffset, $null, 0)
+
+            # Skip certificate table.
+            $FileOffset = $SecurityDirectoryVirtualAddress + $SecurityDirectorySize
+
+            # Hash everything from after the certificate table to the end of the file.
+            if ($FileOffset -lt $FileBytes.Length) {
+                $null = $Hash.TransformBlock($FileBytes, $FileOffset, $FileBytes.Length - $FileOffset, $null, 0)
+            }
+        }
+
+        $null = $Hash.TransformFinalBlock(@(), 0, 0)
+
+        return [System.BitConverter]::ToString($Hash.Hash).Replace("-", "").ToLower()
+    }
+}
+
 function Get-KnownVulnerableKernelDriverList {
 
     [CmdletBinding()]

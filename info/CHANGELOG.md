@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-02
+
+### Added
+
+- Add a function for calculating the Authenticode hash of a PE file.
+
 ## 2026-06-27
 
 ### Added
