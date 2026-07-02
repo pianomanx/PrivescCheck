@@ -1109,6 +1109,8 @@ function Get-KnownVulnerableKernelDriver {
         $FileHashMd5 = ""
         $FileHashSha1 = ""
         $FileHashSha256 = ""
+        $FileAuthenticodeHashSha1 = ""
+        $FileAuthenticodeHashSha256 = ""
 
         foreach ($VulnerableDriver in $VulnerableDrivers) {
 
@@ -1136,31 +1138,49 @@ function Get-KnownVulnerableKernelDriver {
                 }
 
                 40 {
-                    # SHA1 hash
+                    # SHA1 hash or Authenticode SHA1 hash
                     if ([String]::IsNullOrEmpty($FileHashSha1)) {
                         $FileHashSha1 = Get-FileHashHex -FilePath $Service.ImagePathResolved -Algorithm SHA1
+                    }
+                    if ([String]::IsNullOrEmpty($FileAuthenticodeHashSha1)) {
+                        $FileAuthenticodeHashSha1 = Get-FileAuthenticodeHashHex -FilePath $Service.ImagePathResolved -Algorithm SHA1
                     }
                     if ($Hashes -contains $FileHashSha1) {
                         $ResultHash = $FileHashSha1
                         $ResultUrl = $VulnerableDriver.Url
                     }
+                    else {
+                        if ($Hashes -contains $FileAuthenticodeHashSha1) {
+                            $ResultHash = $FileAuthenticodeHashSha1
+                            $ResultUrl = $VulnerableDriver.Url
+                        }
+                    }
                     break
                 }
 
                 64 {
-                    # SHA256 hash
+                    # SHA256 hash or Authenticode SHA256 hash
                     if ([String]::IsNullOrEmpty($FileHashSha256)) {
                         $FileHashSha256 = Get-FileHashHex -FilePath $Service.ImagePathResolved -Algorithm SHA256
+                    }
+                    if ([String]::IsNullOrEmpty($FileAuthenticodeHashSha256)) {
+                        $FileAuthenticodeHashSha256 = Get-FileAuthenticodeHashHex -FilePath $Service.ImagePathResolved -Algorithm SHA256
                     }
                     if ($Hashes -contains $FileHashSha256) {
                         $ResultHash = $FileHashSha256
                         $ResultUrl = $VulnerableDriver.Url
                     }
+                    else {
+                        if ($Hashes -contains $FileAuthenticodeHashSha256) {
+                            $ResultHash = $FileAuthenticodeHashSha256
+                            $ResultUrl = $VulnerableDriver.Url
+                        }
+                    }
                     break
                 }
 
                 default {
-                    Write-Warning "Empty or invalid hash type for entry: $($VulnerableDriver.Id)"
+                    Write-Warning "Empty or invalid hash type for entry: $($VulnerableDriver.Id) - $($Hashes[0])"
                 }
             }
 

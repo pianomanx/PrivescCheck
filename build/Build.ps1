@@ -330,6 +330,7 @@ function Get-LolDriver {
 
     $LolDriversUrl = "https://www.loldrivers.io/api/drivers.csv"
     $LolDrivers = ""
+
     try {
         $LolDrivers = (New-Object Net.WebClient).DownloadString($LolDriversUrl)
     }
@@ -341,31 +342,33 @@ function Get-LolDriver {
     $LolDrivers = ConvertFrom-Csv -InputObject $LolDrivers
     Write-Message -Type Success -Message "Successfully downloaded LOL driver list from $($LolDriversUrl) (count=$($LolDrivers.Count))"
 
-    $LolDriversVulnerable = $LolDrivers | Where-Object { $_.Category -like "*vulnerable*" }
-    Write-Message -Message "Filtered list on 'vulnerable' drivers (count=$($LolDriversVulnerable.Count))"
+    $VulnerableLolDrivers = $LolDrivers | Where-Object { $_.Category -like "*vulnerable*" }
+    Write-Message -Message "Filtered list on 'vulnerable' drivers (count=$($VulnerableLolDrivers.Count))"
 
-    $LolDrivers = @()
-    $LolDriversVulnerable | ForEach-Object {
+    foreach ($VulnerableLolDriver in $VulnerableLolDrivers) {
 
         # Keep the UUID for future reference in the LOL drivers database.
         $Result = New-Object -TypeName PSObject
-        $Result | Add-Member -MemberType "NoteProperty" -Name "Id" -Value $_.Id
+        $Result | Add-Member -MemberType "NoteProperty" -Name "Id" -Value $VulnerableLolDriver.Id
 
         # Extract all the valid hashes from the data
-        $HashesMd5 = [string[]] ($_.KnownVulnerableSamples_MD5 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 32 })
-        $HashesSha1 = [string[]] ($_.KnownVulnerableSamples_SHA1 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 40 })
-        $HashesSha256 = [string[]] ($_.KnownVulnerableSamples_SHA256 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 64 })
+        $HashesMd5 = [String[]] ($VulnerableLolDriver.KnownVulnerableSamples_MD5 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 32 })
+        $HashesSha1 = [String[]] ($VulnerableLolDriver.KnownVulnerableSamples_SHA1 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 40 })
+        $HashesSha256 = [String[]] ($VulnerableLolDriver.KnownVulnerableSamples_SHA256 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 64 })
+        $AuthenticodeHashesSha1 = [String[]] ($VulnerableLolDriver.KnownVulnerableSamples_Authentihash_SHA1 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 40 })
+        $AuthenticodeHashesSha256 = [String[]] ($VulnerableLolDriver.KnownVulnerableSamples_Authentihash_SHA256 -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -eq 64 })
 
-        if (($HashesMd5.Count -eq 0) -and ($HashesSha1.Count -eq 0) -and ($HashesSha256.Count -eq 0)) {
-            Write-Message -Type Warning -Message "No hash found for entry with ID: $($_.Id)"
+        # Find the hash list that has the most values
+        $HashesMax = (@($HashesMd5.Count, $HashesSha1.Count, $HashesSha256.Count, $AuthenticodeHashesSha1.Count, $AuthenticodeHashesSha256.Count) | Measure-Object -Maximum).Maximum
+
+        if ($HashesMax -eq 0) {
+            Write-Message -Type Warning -Message "No hash found for entry with ID: $($VulnerableLolDriver.Id)"
             continue
         }
 
-        # Find the hash list that has the most values
-        $HashesMax = (@($HashesMd5.Count, $HashesSha1.Count, $HashesSha256.Count) | Measure-Object -Maximum).Maximum
-
         # Keep the hash list that has the most values, prioritize the shortest hashes
         # to minimize the total space they will take in the final script.
+        # If no file hash is found, fall back to Authenticode hash.
         if ($HashesMd5.Count -eq $HashesMax) {
             $Result | Add-Member -MemberType "NoteProperty" -Name "Hash" -Value ($HashesMd5 -join ",")
         }
@@ -374,6 +377,12 @@ function Get-LolDriver {
         }
         elseif ($HashesSha256.Count -eq $HashesMax) {
             $Result | Add-Member -MemberType "NoteProperty" -Name "Hash" -Value ($HashesSha256 -join ",")
+        }
+        elseif ($AuthenticodeHashesSha1.Count -eq $HashesMax) {
+            $Result | Add-Member -MemberType "NoteProperty" -Name "Hash" -Value ($AuthenticodeHashesSha1 -join ",")
+        }
+        elseif ($AuthenticodeHashesSha256.Count -eq $HashesMax) {
+            $Result | Add-Member -MemberType "NoteProperty" -Name "Hash" -Value ($AuthenticodeHashesSha256 -join ",")
         }
 
         $Result

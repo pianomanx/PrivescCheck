@@ -5,6 +5,11 @@
 ### Added
 
 - Add a function for calculating the Authenticode hash of a PE file.
+- Add Authenticode hash handling in vulnerable driver check.
+
+### Fixed
+
+- Fix incorrect error handling in build script.
 
 ## 2026-06-27
 
