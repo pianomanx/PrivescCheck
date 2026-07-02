@@ -7,6 +7,10 @@
 - Add a function for calculating the Authenticode hash of a PE file.
 - Add Authenticode hash handling in vulnerable driver check.
 
+### Modified
+
+- Set handle leak check as "risky".
+
 ### Fixed
 
 - Fix incorrect error handling in build script.
